@@ -332,7 +332,7 @@
 	我还是使用gitcmd来执行比较顺手
 
 
-## 数据库字段的定义 ##
+## 数据库字段的定义1 ##
 	*users app
 		startapp users
 		使用继承AbstractUser类来扩展user
@@ -387,6 +387,7 @@
 				**注意一下**
 
 				我们以后不要在初始化的时候就执行makemigrations & migrate操作，应当在我们设计完userProfile（自定义字段）之后再执行该操作，那样就不会报错了。
+
 ## 循环引用 ##
 
 	![循环引用图片](https://i.imgur.com/ViOOaXT.png)
@@ -461,3 +462,615 @@
 	'
 
 	你可能会问，为什么不把与用户相关的评论，点赞，学习的课程，课程进度等信息也放到这个app中呢？其实是因为那些信息的相关性很大，经常是循环引用，所以我们把那些信息都放到operation这个app中。
+
+## 数据库字段的定义2 ##
+	*course 课程模块
+		创建courses app
+
+			创建 课程信息 Course model
+			'
+			from django.db import models
+			from datetime import datetime
+			# Create your models here.
+			
+			# 课程信息
+			class Course(models.Model):
+			    name = models.CharField(max_length=50, verbose_name="课程名")
+			    # 描述这一块，我们先用TextField，因为它允许我们不输入长度,而且可以输入值无范围，之后再更新为富文本形式
+			    desc = models.CharField(max_length=300, verbose_name="课程描述")
+			    detail = models.TextField(max_length=500, verbose_name="课程详情")
+			    is_banner = models.BooleanField(default=False, verbose_name="是否轮播")
+			    degree = models.CharField(max_length=2, 
+			choices=(('cj', '初级'), ('zj', '中级'), ('gj', '高级')), verbose_name="难度等级")
+			    # 学习数这里使用分钟数作计量单位，便于后台记录(存储最小单位)和前台转换
+			    learn_times = models.IntegerField(default=0, verbose_name="学习时长（分钟数）")
+			    # 学习人数从点击开始学习算起
+			    students = models.IntegerField(default=0, verbose_name="学习人数")
+			    # 收藏人数从点击收藏按钮算起
+			    fav_nums = models.IntegerField(default=0, verbose_name="收藏人数")
+			    image = models.ImageField(upload_to='courses/%Y/%m', max_length=100, verbose_name="封面图片")
+			    # 点击数从点击页面算起
+			    click_nums = models.IntegerField(default=0, verbose_name="点击数")
+			    category = models.CharField(default="后端开发", max_length=20, verbose_name="课程类别")
+			    tag = models.CharField(default='', max_length=10, verbose_name="课程标签")
+			    youneeded_know = models.CharField(default='', max_length=300, verbose_name="课程须知")
+			    teacher_tell = models.CharField(default='', max_length=300, verbose_name="老师告诉你")
+			    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+			
+			    class Meta:
+			        verbose_name = "课程"
+			        verbose_name_plural = verbose_name
+			        
+			    def __str__(self):
+			        return self.name
+			'		
+		
+		创建 章节信息 Lesson model
+
+			'
+			# 章节信息
+			class Lesson(models.Model):
+			    # 前面知道一个课程对应多个章节，所以在章节表中将课程设置为外键。
+			    # 此处的course其实就是一个用来告诉我们这个章节属于哪个课程的字段
+			    course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name="课程")
+			    name = models.CharField(max_length=100, verbose_name="章节名")
+			    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+			
+			    class Meta:
+			        verbose_name = "章节"
+			        verbose_name_plural = verbose_name
+			
+			    def __str__(self):
+			        # 采用了字符串的格式化方式来同时引用多个数据
+			        return '<<{0}>>课程的章节》{1}'.format(self.course, self.name)  
+			        # return self.name也是可以
+			'
+			外键参数解释：
+				*course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name="课程")，
+				这其实就是一个用于告知信息的字段，包含3个参数：Course是指你与哪个对象存在外键关系（记住是表的名称，不是字段的名称）；
+				on_delete=models.CASCADE是指主外关系键中，级联删除，也就是当删除主表的数据时候从表中的数据也随着一起删除；	*
+
+		创建 视频信息 Video model
+
+			'
+			# 视频信息
+			class Video(models.Model):
+			    # 前面知道一个章节对应多个视频，所以在视频表中将章节设置为外键。
+			    # 此处的lesson其实就是一个用来告诉我们这个视频属于哪个章节的字段
+			    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, verbose_name="章节")
+			    name = models.CharField(max_length=100, verbose_name="视频名称")
+			    url = models.URLField(max_length=200, default='', verbose_name="访问地址")
+			    learn_times = models.IntegerField(default=0, verbose_name="学习时长（分钟数）")
+			    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+			
+			    class Meta:
+			        verbose_name = "视频"
+			        verbose_name_plural = verbose_name
+			
+			    def __str__(self):
+			        return '<<{0}>>章节的视频》{1}'.format(self.lesson, self.name)   # return self.name也是可以
+
+			'
+			
+		创建 课程资料信息 courseResource model
+
+			'
+			# 课程资料信息
+			class CourseResource(models.Model):
+			    # 前面知道一个课程对应多个课程资料，所以在课程资料表中将课程设置为外键。
+			    # 此处的course其实就是一个用来告诉我们这个课程资料属于哪个课程的字段
+			    course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name="课程")
+			    name = models.CharField(max_length=100, verbose_name="名称")
+			    download = models.FileField(max_length=100, upload_to='course/resource/%Y/%m', 
+			verbose_name="资源文件")
+			    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+			    
+			    class Meta:
+			        verbose_name = "课程资源"
+			        verbose_name_plural = verbose_name
+			        
+			    def __str__(self):
+			        return '<<{0}>>课程的课程资料》{1}'.format(self.course, self.name)   # return self.name也行
+			'
+
+	*organization 课程模块
+		创建organization app
+
+		创建 CityDict、CourseOrg、Teacher model
+
+		'
+		from django.db import models
+		from datetime import datetime
+		# Create your models here.
+		# 城市信息
+		class CityDict(models.Model):
+		    name = models.CharField(max_length=20, verbose_name="城市")
+		    # 描述这一块，我们先用TextField，因为它允许我们不输入长度,而且可以输入值无范围，之后再更新为富文本形式
+		    desc = models.CharField(max_length=200, verbose_name="描述")
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+		
+		    class Meta:
+		        verbose_name = "城市"
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.name   # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 课程机构
+		class CourseOrg(models.Model):
+		    name = models.CharField(max_length=50, verbose_name="机构名称")
+		    desc = models.TextField(verbose_name="机构描述")
+		    tag = models.CharField(max_length=10, default="全国知名", verbose_name="机构标签")
+		    category = models.CharField(max_length=20, default='pxjg',
+		choices=(('pxjg', '培训机构'), ('gr', '个人'), ('gx', '高校')), verbose_name="机构类别")
+		    click_nums = models.IntegerField(default=0, verbose_name='点击数')
+		    fav_nums = models.IntegerField(default=0, verbose_name='收藏数')
+		    image = models.ImageField(max_length=50, upload_to="org/%Y/%m", verbose_name="logo")
+		    address = models.CharField(max_length=150, verbose_name="机构地址")
+		    # 前面知道一个城市对应多个课程机构，所以在课程机构表中将城市设置为外键。
+		    # 此处的city其实就是一个用来告诉我们这个课程机构属于哪个城市的字段
+		    city = models.ForeignKey(CityDict, on_delete=models.CASCADE, verbose_name="所在城市说明")
+		    students = models.IntegerField(default=0, verbose_name="学习人数")
+		    course_nums = models.IntegerField(default=0, verbose_name="课程数")
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+		
+		    class Meta:
+		        verbose_name = "课程机构"
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.name   # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 教师信息
+		class Teacher(models.Model):
+		    # 前面知道一个课程机构对应多个教师，所以在教师信息表中将授课机构设置为外键。
+		    # 此处的org其实就是一个用来告诉我们这个教师属于哪个课程机构的字段
+		    org = models.ForeignKey(CourseOrg, on_delete=models.CASCADE, verbose_name="所属教师")
+		    name = models.CharField(max_length=50, verbose_name="教师名")
+		    work_years = models.IntegerField(default=0, verbose_name="工作年限")
+		    work_position = models.CharField(max_length=50, verbose_name="公司职位")
+		    work_company = models.CharField(max_length=50, verbose_name="就职公司")
+    		course = models.ForeignKey(Course, verbose_name='课程', on_delete=models.CASCADE, null=True, blank=True)#这个可以以后在加
+		    points = models.CharField(max_length=50, verbose_name="教学特点")
+		    click_nums = models.IntegerField(default=0, verbose_name="点击数")
+		    fav_nums = models.IntegerField(default=0, verbose_name='收藏数')
+		    age = models.IntegerField(default=18, verbose_name='年龄')
+		    image = models.ImageField(default='', upload_to='teacher/%Y/%m',
+		verbose_name='头像', max_length=100)
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name="添加时间")
+		
+		    class Meta:
+		        verbose_name = "教师"
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.name   # 这里很重要，否则在后台就显示不出Meta信息
+		'
+
+		
+
+	*operation 课程模块
+		创建operation app
+
+		创建  UserAsk、CourseComments、UserFavorite、UserMessage、UserCourse model
+
+		'
+		from django.db import models
+		from datetime import datetime
+		# Create your models here.
+		
+		from users.models import UserProfile
+		from courses.models import Course
+		
+		
+		# 用户我要学习信息
+		class UserAsk(models.Model):
+		    name = models.CharField(max_length=20, verbose_name="姓名")
+		    mobile = models.CharField(max_length=11, verbose_name="手机")
+		    course_name = models.CharField(max_length=50, verbose_name="课程名")
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name='添加时间')
+		
+		    class Meta:
+		        verbose_name = "用户咨询"
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.name    # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 课程评论
+		class CourseComments(models.Model):
+		    # 前面知道一个用户发表多个课程评论，所以在课程评论表中将用户设置为外键。
+		    # 此处的user其实就是一个用来告诉我们这个课程评论属于哪个用户的字段
+		    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, verbose_name="用户名")
+		    # 前面知道一门课程具有多个课程评论，所以在课程评论表中将课程设置为外键。
+		    # 此处的course其实就是一个用来告诉我们这个课程评论属于哪个课程的字段
+		    course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name="课程")
+		    comment = models.CharField(max_length=200, verbose_name="评论")
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name='添加时间')
+		
+		    class Meta:
+		        verbose_name = '课程评论'
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.comment   # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 用户收藏信息
+		class UserFavorite(models.Model):
+		    # 前面知道一个用户可以收藏多个内容，所以在用户收藏表中将用户设置为外键。
+		    # 此处的user其实就是一个用来告诉我们这个用户收藏属于哪个用户的字段
+		    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, verbose_name="用户名")
+		    fav_id = models.IntegerField(default=0, verbose_name='数据Id')
+		    fav_type = models.CharField(choices=(('1', '课程'), ('2', '课程机构'), ('3', '讲师')), default=1,
+		verbose_name='收藏类型',max_length=2)
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name='添加时间')
+		
+		    class Meta:
+		        verbose_name = "用户收藏"
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.user   # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 用户消息信息
+		class UserMessage(models.Model):
+		    # 我们的消息有两种:一种是发给全员，另一种则是发给特定某一个用户。
+		    # 所以如果使用外键，那么每个消息就要对应一个用户，比较难以实现全员消息的通知。
+		    # 因此我们设置用户id,如果为0就发给所有用户，不为0就是发给特定Id的用户。
+		    user = models.IntegerField(default=0, verbose_name="接收用户")
+		    message = models.CharField(max_length=500, verbose_name='消息内容')
+		    # 设置消息是否已读，采用布尔类型 BooleanField： False表示未读,True表示已读。
+		    has_read = models.BooleanField(default=False, verbose_name='是否已读')
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name='添加时间')
+		
+		    class Meta:
+		        verbose_name = '用户消息'
+		        verbose_name_plural = verbose_name
+		
+		    def __str__(self):
+		        return self.message  # 这里很重要，否则在后台就显示不出Meta信息
+		
+		
+		# 用户课程信息
+		class UserCourse(models.Model):
+		    # 前面知道一个用户可以学习多门课程，所以在用户课程表中将用户设置为外键。
+		    # 此处的user其实就是一个用来告诉我们这个课程属于哪个用户的字段
+		    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, verbose_name='用户名')
+		    # 前面知道一门课程可以有多个课程的信息，所以在用户课程表中将课程设置为外键。
+		    # 此处的course其实就是一个用来告诉我们这个课程信息属于哪门课程的字段
+		    course = models.ForeignKey(Course, on_delete=models.CASCADE, verbose_name='课程')
+		    add_time = models.DateTimeField(default=datetime.now, verbose_name='学习时间')
+		
+		    class Meta:
+		        verbose_name = '用户课程'
+		        verbose_name_plural = verbose_name
+		
+		        def __str__(self):
+		            return self.user  # 这里很重要，否则在后台就显示不出Meta信息
+		'
+
+## django自带admin与xadmin ##
+
+	*设置后台语言与市区
+
+		'
+		# 将语言修改为中文
+		LANGUAGE_CODE = 'zh-hans'
+		
+		# 将时区修改为上海
+		TIME_ZONE = 'Asia/Shanghai'
+		
+		# 数据库存储使用时间，True时间会被存为UTC的时间。所以采用False
+		USE_TZ = False
+		'
+
+	*注册model到后台
+		model需要再admin.py中注册才能在后台显示
+		以userProfile为例
+		'
+		from django.contrib import admin
+
+		# Register your models here.
+		from users.models import UserProfile
+		
+		admin.site.register(UserProfile)
+		'
+
+	*安装xadmin
+
+		xadmin对于django2支持不好，找了一个修改好的版本可以直接使用，存在了百度网盘https://pan.baidu.com/s/1DoXyFn2_g2_RQVPorjhp1w
+
+		新建一个名为extra_apps的Python package ,用来存放我们的第三方插件，并将前面下载的xadmin文件（解压之后）移入其中：
+
+		同时需要对路径进行配置：打开eduline/settings.py文件，找到里面的第16行代码，我们加入以下内容：
+		
+		'import os, sys
+		
+		# Build paths inside the project like this: os.path.join(BASE_DIR, ...)
+		BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+		sys.path.insert(0, os.path.join(BASE_DIR, 'apps'))
+		sys.path.insert(0,os.path.join(BASE_DIR, 'extra_apps'))'
+		
+		接下来是xadmin的安装:在确保前面的操作完成以后，我们打开eduline/settings.py文件，找到里面的第35行代码，在后面修改为如下：
+		
+		'INSTALLED\_APPS = [
+		
+		'django.contrib.admin',
+		
+		'django.contrib.auth',
+		
+		'django.contrib.contenttypes',
+		
+		'django.contrib.sessions',
+		
+		'django.contrib.messages',
+		'django.contrib.staticfiles',
+		'users',
+		'courses',
+		'organization',
+		'operation',
+		'xadmin',
+		'crispy_forms'
+		]'
+		
+		然后打开eduline/urls.py文件，把urls中默认的admin修改为xadmin:
+		
+		'from django.urls import path
+		
+		import xadmin
+		
+		urlpatterns = [
+		path('xadmin/', xadmin.site.urls),
+		
+		]'
+		
+		然后进行我们数据库的生成和迁移操作：makemigrations和migrate：
+		
+		你会发现执行第一个命令就报错了，那是因为我们缺少一些库的支持，我们依次按照如下库：
+		
+		pip install future
+		
+		pip install six
+		
+		pip install httplib2
+		
+		pip install django-import-export
+		
+		pip install django-formtools==2.1   # 记住一定是2.1的版本，否则会出错
+		
+		使用的命令为：pip install package -i https://pypi.tuna.tsinghua.edu.cn/simple
+		
+		之后会安装一大堆库，我们使用pip list命令查看一下：
+		
+		为了便于你查看自己是否缺少某个库，我这里贴一下我的各个库的版本（你各个库的版本不能低于我的版本，否则就可能会出错）：
+	
+		接下来，我们重新进行数据库的生成和迁移操作：makemigrations和migrate,现在xadmin的配置已经完成了.
+		
+	
+	*Xadmin的使用介绍
+
+		正如前面你所知道的，Xadmin是基于Django的admin来开发的，所以Xadmin也继承了许多admin的用法，下面就分别介绍一下它们的使用情况：
+		
+		因为我们之前在admin里面已经注册了UserProfile，所以xadmin里面也就有了这个信息，那我们接下来就设置一下我们文件的格式，让系统默认去寻找我们xadmin的adminx.py文件，而不是去寻找原来admin的admin.py文件。
+		验证码功能的实现
+		
+		我们打开eduline/apps/users这个文件夹，在里面新建一个名为adminx.py的文件，我们准备开始验证码功能的实现,在其中添加如下代码：
+		
+		'#！/user/bin/python
+		
+		# -_- coding:utf-8 -_-
+		
+		# @Time: 2018/3/26 10:05
+		
+		# @Author: Envse
+		
+		# @File: adminx.py
+		
+		# 导入xadmin，如果出现字体底下出现红色属于正常现象（实际上环境已经配置过）
+		
+		import xadmin
+		
+		# 因为处于同一个目录之下，所以可以直接使用.models代替当前目录
+		
+		from .models import EmailVerifyRecord
+		
+		# 写一个管理器，命名规则：Model+Admin,注意这里不再是继承admin，而是继承object这个最高类
+		
+		class EmailVerifyRecordAdmin(object):
+		
+		pass
+		
+		# 将EmailVerifyRecord注册进我们的admin中, 并为它选择管理器EmailVerifyRecordAdmin
+		
+		xadmin.site.register(EmailVerifyRecord, EmailVerifyRecordAdmin)'
+
+		现在xadmin后台就添加上了 邮箱验证码的model
+
+		现在想在后台页面同时显示全部model字段信息，所以需要配置一下:我们打开users/adminx.py文件，在里面的管理器中设置list_display字段:
+
+
+		'
+		# 写一个管理器，命名规则：Model+Admin,注意这里不再是继承admin，而是继承object这个最高类
+		
+		class EmailVerifyRecordAdmin(object):
+		
+		# 配置后台显示的列信息
+		
+		list\_display = 'code', 'email', 'send\_type', 'send\_time'  # 一次显示你想出现的多行数据，
+		
+		# 这里面的字段都是你在前面数据库中定义的，请保持数据的一致
+
+		'
+
+		然后还可以配置过滤器 search_fields，搜索框 list_filter
+
+		'
+		# 写一个管理器，命名规则：Model+Admin,注意这里不再是继承admin，而是继承object这个最高类
+
+		class EmailVerifyRecordAdmin(object):
+		
+		# 配置后台显示的列信息
+		
+		list_display = 'code', 'email', 'send_type', 'send_time'  # 一次显示你想出现的多行数据
+		
+		search_fields = 'code', 'email', 'send_type'  # 查询你想要的数据,一般不依据时间进行查询
+		
+		list_filter = 'code', 'email', 'send_type', 'send_time'  # 过滤器
+		'
+		之后刷新一下网页:
+		![](https://i.imgur.com/fBnnGAa.png)
+		
+		*admin, xadmin和其他后台管理系统的区别
+
+			像PHP，JAVA等其他语言，它们是按照一个功能模块来进行一个功能设计的。而admin和 xadmin就不一样了，
+			它们是对于每张表都可以进行增删改查的管理器，因此我们还可以在增删改查的基础上加上我们自己的后台逻辑，
+			完成我们自定义的功能。因此，从某种程度可以说它是不依赖于具体业务的，不管什么系统后台都是由表组成。
+
+		*以在其余的各个表中，都加上这些个功能。
+			
+			'
+			from .models import Banner
+
+			class BannerAdmin(object):
+			
+			list\_display = 'title', 'image', 'url', 'index', 'add\_time'  # 一次显示你想出现的多行数据
+			
+			search\_fields = 'title', 'image', 'url', 'index'  # 查询你想要的数据
+			
+			list\_filter = 'title', 'image', 'url', 'index', 'add\_time'  # 过滤器
+			
+			xadmin.site.register(Banner, BannerAdmin)
+			'
+		
+
+			**再次强调一下：这里面的字段都是你前面在数据库中定义的，请保持数据库字段定义的一致性，不要乱写，否则后面会出很大的BUG！**
+
+		*注册其他app的model并设置adminx.py
+			
+			Django在根据models生成数据库表时报 __init__() missing 1 required positional argument: 'on_delete'
+			解决方法：在外键值的后面加上 on_delete=models.CASCADE 原文链接https://www.cnblogs.com/phyger/p/8035253.html
+			
+			courses
+				'
+				import xadmin
+				from .models import *
+				
+				
+				class CourseAdmin(object):
+				    list_display = ['name', 'desc', 'detail', 'degree', 'learn_times', 'students', 'fav_nums', 'image', 'click_nums',
+				                    'add_time']
+				    search_fields = ['name', 'desc', 'detail', 'degree', 'students', 'fav_nums', 'image', 'click_nums']
+				    list_filter = ['name', 'desc', 'detail', 'degree', 'learn_times', 'students', 'fav_nums', 'image', 'click_nums',
+				                   'add_time']
+				
+				
+				class LessonAdmin(object):
+				    list_display = ['course', 'name', 'add_time']
+				    search_fields = ['course', 'name']
+				    list_filter = ['course', 'name', 'add_time']
+				
+				
+				class VideoAdmin(object):
+				    list_display = ['lesson', 'name', 'add_time']
+				    search_fields = ['lesson', 'name']
+				    list_filter = ['lesson', 'name', 'add_time']
+				
+				
+				class CourseResourceAdmin(object):
+				    list_display = ['course', 'name', 'download', 'add_time']
+				    search_fields = ['course', 'name', 'download']
+				    list_filter = ['course', 'name', 'download', 'add_time']
+				
+				
+				xadmin.site.register(Course, CourseAdmin)
+				xadmin.site.register(Lesson, LessonAdmin)
+				xadmin.site.register(Video, VideoAdmin)
+				xadmin.site.register(CourseResource, CourseResourceAdmin)
+	
+				'
+		
+			opreation
+				'
+				import xadmin
+				from .models import UserAsk, CourseComments, UserFavorite, UserMessage, UserCourse
+				
+				
+				class UserAskAdmin(object):
+				    list_display = ['name', 'course_name', 'mobile', 'add_time']
+				    search_fields = ['name', 'course_name', 'mobile']
+				    list_filter = ['name', 'course_name', 'mobile', 'add_time']
+				
+				
+				class CourseCommentsAdmin(object):
+				    list_display = ['user', 'course', 'comment', 'add_time']
+				    search_fields = ['user', 'course', 'comment']
+				    list_filter = ['user', 'course', 'comment', 'add_time']
+				
+				
+				class UserFavoriteAdmin(object):
+				    list_display = ['user', 'fav_id', 'fav_type', 'add_time']
+				    search_fields = ['user', 'fav_id', 'fav_type']
+				    list_filter = ['user', 'fav_id', 'fav_type', 'add_time']
+				
+				
+				class UserMessageAdmin(object):
+				    list_display = ['user', 'message', 'has_read', 'add_time']
+				    search_fields = ['user', 'message', 'has_read']
+				    list_filter = ['user', 'message', 'has_read', 'add_time']
+				
+				
+				class UserCourseAdmin(object):
+				    list_display = ['user', 'course', 'add_time']
+				    search_fields = ['user', 'course']
+				    list_filter = ['user', 'course', 'add_time']
+				
+				
+				xadmin.site.register(UserAsk, UserAskAdmin)
+				xadmin.site.register(CourseComments, CourseCommentsAdmin)
+				xadmin.site.register(UserFavorite, UserFavoriteAdmin)
+				xadmin.site.register(UserMessage, UserMessageAdmin)
+				xadmin.site.register(UserCourse, UserCourseAdmin)
+
+				'
+
+			organization
+
+				'
+				import xadmin
+				from .models import CityDict, CourseOrg, Teacher
+				
+				
+				class CityDictAdmin(object):
+				    list_display = ['name', 'desc', 'add_time']
+				    search_fields = ['name', 'desc']
+				    list_filter = ['name', 'desc', 'add_time']
+				
+				
+				class CourseOrgAdmin(object):
+				    list_display = ['name', 'desc', 'click_nums', 'fav_nums', 'image', 'address', 'city', 'add_time']
+				    search_fields = ['name', 'desc', 'click_nums', 'fav_nums', 'image', 'address', 'city']
+				    list_filter = ['name', 'desc', 'click_nums', 'fav_nums', 'image', 'address', 'city', 'add_time']
+				
+				
+				class TeacherAdmin(object):
+				    list_display = ['name', 'work_years', 'work_company', 'work_position', 'course', 'points', 'click_nums', 'fav_nums',
+				                    'add_time']
+				    search_fields = ['name', 'work_yesars', 'work_company', 'work_position', 'course', 'points', 'click_nums',
+				                     'fav_nums', ]
+				    list_filter = ['name', 'work_years', 'work_company', 'work_position', 'course', 'points', 'click_nums', 'fav_nums',
+				                   'add_time']
+				
+				
+				xadmin.site.register(CityDict, CityDictAdmin)
+				xadmin.site.register(CourseOrg, CourseOrgAdmin)
+				xadmin.site.register(Teacher, TeacherAdmin)
+				'
+
+## 修改xadmin主题，顶部名称等 ##
+	
+	
