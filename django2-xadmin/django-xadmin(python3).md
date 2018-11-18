@@ -1071,6 +1071,238 @@
 				xadmin.site.register(Teacher, TeacherAdmin)
 				'
 
-## 修改xadmin主题，顶部名称等 ##
+## 后台管理配置 ##
+
+	*开启主题功能
+		在users/adminx.py中添加
+		'
+		from .models import EmailVerifyRecord
+		
+		class BaseSetting(object):
+		    enable_themes = True  # 可修改主题
+		    use_bootswatch = True  # 增加主题的可选内容
+		    
+		# 将全局配置管理与view进行绑定
+		xadmin.site.register(views.BaseAdminView, BaseSetting)
+		'
 	
+	*后台管理名称配置
+		在users/adminx.py中添加
+		'
+		class GlobalSettings(object):
+		    site_title = '测试后台'  # 站点标题
+		    site_footer = '测试footer'   # 站点尾注
+		    menu_style = 'accordion'   # 折叠收起菜单
+		
+		# 将站点标题与站点尾注进行注册:
+		xadmin.site.register(views.CommAdminView, GlobalSettings)
+		'
+
+	*配置apps的后台显示（列表的中文显示）
+
+		打开每个app下面的apps.py文件，追加verbose_name信息。我们以users/apps.py为例,修改为如下：
+
+		'
+		from django.apps import AppConfig
+		class UsersConfig(AppConfig):
+		    name = 'users'
+		    verbose_name = '用户信息'
+		'
+		在每个app的__init__.py文件中添加：
+			'default_app_config = "users.apps.UsersConfig"'按此格式添加appname.apps.AppnameConfig（注意第二个Appname首字母大写）
+
+	*自定义菜单显示顺序（未实现太麻烦以后再看）
+		记住这段代码是和我们之前定义全局配置放在同一个函数里面的
+		
+		在users/adminx.py文件加上以下代码：
+
+		'
+		from users.models import EmailVerifyRecord, Banner, UserProfile
+		from courses.models import Course, CourseResource, Lesson, Video
+		from organization.models import CourseOrg, CityDict, Teacher
+		from operation.models import CourseComments, UserMessage, UserFavorite, UserCourse, UserAsk
+		from django.contrib.auth.models import Group, Permission
+		from xadmin.models import Log
+		
+		
+		class GlobalSettings(object):
+		    site_title = '慕学后台管理系统'
+		    site_footer = '慕海学习网'
+		    menu_style = 'accordion'
+		
+		    def get_site_menu(self):
+		        return (
+		                {'title': '课程管理', 'menus': (
+		                    {'title': '课程信息', 'url': self.get_model_url(Course, 'changelist')},
+		                    {'title': '章节信息', 'url': self.get_model_url(Lesson, 'changelist')},
+		                    {'title': '视频信息', 'url': self.get_model_url(Video, 'changelist')},
+		                    {'title': '课程资源', 'url': self.get_model_url(CourseResource, 'changelist')},
+		                    {'title': '课程评论', 'url': self.get_model_url(CourseComments, 'changelist')},
+		                )},
+		                {'title': '机构管理', 'menus': (
+		                    {'title': '所在城市', 'url': self.get_model_url(CityDict, 'changelist')},
+		                    {'title': '机构讲师', 'url': self.get_model_url(Teacher, 'changelist')},
+		                    {'title': '机构信息', 'url': self.get_model_url(CourseOrg, 'changelist')},
+		                )},
+		                {'title': '用户管理', 'menus': (
+		                    {'title': '用户信息', 'url': self.get_model_url(UserProfile, 'changelist')},
+		                    {'title': '用户验证', 'url': self.get_model_url(EmailVerifyRecord, 'changelist')},
+		                    {'title': '用户课程', 'url': self.get_model_url(UserCourse, 'changelist')},
+		                    {'title': '用户收藏', 'url': self.get_model_url(UserFavorite, 'changelist')},
+		                    {'title': '用户消息', 'url': self.get_model_url(UserMessage, 'changelist')},
+		                )},
+		
+		                {'title': '系统管理', 'menus': (
+		                    {'title': '用户咨询', 'url': self.get_model_url(UserAsk, 'changelist')},
+		                    {'title': '首页轮播', 'url': self.get_model_url(Banner, 'changelist')},
+		                    {'title': '用户分组', 'url': self.get_model_url(Group, 'changelist')},
+		                    {'title': '用户权限', 'url': self.get_model_url(Permission, 'changelist')},
+		                    {'title': '日志记录', 'url': self.get_model_url(Log, 'changelist')},
+		            )},)
+		
+		xadmin.site.register(views.CommAdminView, GlobalSettings)
+		'
 	
+	*其他设置
+		
+		xadmin管理员详情页面布局，导航图标设置：https://www.cnblogs.com/adc8868/p/7506973.html
+	
+
+
+## 首页显示与登录页面的配置 ##
+
+		*拷贝首页文件index.html设置静态页面的url路由
+			'	
+			from django.views.generic import TemplateView
+		    # 用''指代根目录，TemplateView.as_view可以将template转换为view
+		    path('', TemplateView.as_view(template_name='index.html'), name='index'),
+			'
+			
+			拷贝静态文件，修改页面中的静态文件链接，目前直接修改为/static/js 或/static/css
+
+		*拷贝首页文件login.html设置静态页面的url路由，修改页面/static/js 或/static/css，修改首页的login连接。
+			path('login/', TemplateView.as_view(template_name="login.html"), name="login"
+			
+			
+		*视图函数View的创建
+
+			'
+			# 当我们配置的url被这个view处理时，将会自动传入request对象.
+			def user_login(request):
+			    # 前端向后端发送的请求方式有两种: get和post
+			
+			    # 登录提交表单时为post
+			    if request.method == "POST":
+			        pass
+			    # 获取登录页面时为get
+			    elif request.method == "GET":
+			        # render的作用是渲染html并返回给用户
+			        # render三要素: request ，模板名称 ，一个字典用于传给前端并在页面显示
+			        return render(request, "login.html", {})
+			'
+
+			修改login.html中的from action连接 并在form中添加 {% csrf_token %}
+			
+		*使用django的默认认证机制（账号密码）
+
+			'
+			# 登录提交表单时为post
+		    if request.method == "POST":
+		        # username，password为前端页面name的返回值，取到用户名和密码我们就开始进行登录验证;取不到时为空。
+		        user_name = request.POST.get('username', '')
+		        pass_word = request.POST.get('password', '')
+		        user = authenticate(username=user_name, password=pass_word)
+		        if user is not None:
+		            # login 有两个参数：request和user。我们在请求的时候，request实际上是写进了一部分信息，
+		            # 然后在render的时候，这些信息也被返回前端页面从而完成用户登录。
+		            login(request, user)
+		            # 页面跳转至网站首页 user request也会被带回到首页，显示登录状态
+		            return render(request, 'index.html')
+		        else:
+		            # 说明里面的值是None，再次跳转回主页面并报错
+		            return render(request, "login.html", {})
+			'
+
+			**注意： authenticate的调用只需要传入用户名和密码即可，如果成功则会返回user对象，失败就返回null**
+
+			html页面登录验证配置
+	
+				'
+				{% if request.user.is_authenticated %}   
+	                <div class="top">
+					<div class="wp">
+						<div class="fl"><p>服务电话：<b>33333333</b></p></div>
+	                    <!--登录后跳转-->
+	
+							<div class="personal">
+	                            <dl class="user fr">
+	                                <dd>admin@admin.com<img class="down fr" src="/static/images/top_down.png"/></dd>
+	                                <dt><img width="20" height="20" src="/static/media/image/2016/12/default_big_14.png"/></dt>
+	                            </dl>
+	                            <div class="userdetail">
+	                            	<dl>
+		                                <dt><img width="80" height="80" src="/static/media/image/2016/12/default_big_14.png"/></dt>
+		                                <dd>
+		                                    <h2>管理员</h2>
+		                                    <p>admin@admin.com</p>
+		                                </dd>
+	                                </dl>
+	                                <div class="btn">
+		                                <a class="personcenter fl" href="usercenter-info.html">进入个人中心</a>
+		                                <a class="fr" href="/logout/">退出</a>
+	                                </div>
+	                            </div>
+	                        </div>
+	
+					</div>
+				</div>    <!--如果用户登录成功，显示个人中心-->
+	            {% else %}             
+	                <div class="top">
+					<div class="wp">
+						<div class="fl"><p>服务电话：<b>33333333</b></p></div>
+	                        <a style="color:white" class="fr registerbtn" href="register.html">注册</a>
+	                        <a style="color:white" class="fr loginbtn" href="/login/">登录</a>
+	
+	                </div>
+	            </div>    <!--如果用户登录失败，显示用户登录按钮-->
+	            {% endif %}
+				'
+		*使用邮箱登录
+
+			
+			打开eduline/settings.py文件，在第34行添加如下代码：
+			'
+			AUTHENTICATION_BACKENDS = (
+			    'users.views.CustomBackend',
+			)'
+			
+			然后打开users/views.py文件，在后面添加如下代码：
+			'
+			from django.contrib.auth.backends import ModelBackend
+			from .models import UserProfile
+			# Q是并集运算
+			from django.db.models import Q
+			
+			# 实现用户名邮箱均可登录的函数，必须继承ModelBackend类，因为它有方法authenticate
+			class CustomBackend(ModelBackend):
+			    def authenticate(self, username=None, password=None, **kwargs):
+			        try:
+			 # 我们不希望用户存在两个，也就是说通过某个用户名和某个邮箱登录的都是指向同一用户，所以采用Q来进行并集查询
+			            user = UserProfile.objects.get(Q(username=username)|Q(email=username))
+			
+			            # 记住不能使用password==password，因为密码都被django的后台给加密了
+			
+			            # UserProfile继承的AbstractUser中有check_password这个函数
+			            if user.check_password(password):
+			                return user
+			        except Exception as e:
+			            return None
+			'
+			但是错误信息如何在前端页面显示呢？我们需要配置一下,打开login.html文件，找到第80行代码：
+			'
+			<div class="error btns login-form-tips" id="jsLoginTips"></div>
+			
+			这个字段就是用来提示错误信息的，我们修改一下：
+			
+			<div class="error btns login-form-tips" id="jsLoginTips">{{ msg }}</div>
+			'

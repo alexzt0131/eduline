@@ -117,6 +117,10 @@ AUTH_PASSWORD_VALIDATORS = [
 #重载AUTH_USER_MODEL
 AUTH_USER_MODEL = 'users.UserProfile'
 
+
+AUTHENTICATION_BACKENDS = (
+    'users.views.CustomBackend',
+)
 # Internationalization
 # https://docs.djangoproject.com/en/2.0/topics/i18n/
 
